@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#16a34a">
+<title>Verifikasi Tanda Tangan</title>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:#eef2f7;color:#1b2433;font-family:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%;}
+  .wrap{max-width:460px;margin:0 auto;padding:22px 16px 40px;}
+  .top{text-align:center;font-size:13px;letter-spacing:.6px;color:#6b7686;font-weight:600;margin-bottom:10px;}
+  .card{background:#fff;border-radius:16px;box-shadow:0 6px 24px rgba(20,30,60,.10);overflow:hidden;}
+  .ok{background:#16a34a;color:#fff;text-align:center;padding:16px 12px;}
+  .ok .ic{font-size:30px;line-height:1;}
+  .ok .tt{font-size:18px;font-weight:800;margin-top:4px;letter-spacing:.4px;}
+  .bad{background:#dc2626;color:#fff;text-align:center;padding:16px 12px;}
+  .bad .ic{font-size:30px;line-height:1;}
+  .bad .tt{font-size:17px;font-weight:800;margin-top:4px;}
+  .sec{padding:18px 18px 8px;}
+  .lbl{font-size:12.5px;color:#6b7686;margin-bottom:6px;}
+  .sig{border:1px dashed #c9d1dd;border-radius:10px;padding:12px;background:#fff;}
+  .sig canvas{display:block;max-width:100%;height:auto;margin:0 auto;}
+  .rows{padding:6px 18px 4px;}
+  .row{display:flex;gap:10px;padding:8px 0;border-top:1px solid #e6eaf0;font-size:14px;}
+  .row .k{flex:0 0 110px;color:#6b7686;}
+  .row .v{flex:1;font-weight:600;word-break:break-word;}
+  .note{margin:12px 18px 18px;padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;font-size:13.5px;line-height:1.5;color:#14532d;}
+  .note .s{margin-top:6px;color:#166534;}
+  .msg{padding:22px 20px;text-align:center;font-size:14px;line-height:1.55;color:#4b5563;}
+  .foot{text-align:center;font-size:12px;color:#8a94a3;margin-top:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">VERIFIKASI TANDA TANGAN</div>
+  <div class="card" id="card"></div>
+  <div class="foot">Data ditampilkan langsung dari isi QR, tidak dikirim ke server.</div>
+</div>
+<script>
+(function(){
+  var card = document.getElementById('card');
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function row(l, v){ return v ? '<div class="row"><div class="k">' + l + '</div><div class="v">' + esc(v) + '</div></div>' : ''; }
+
+  var m = /^#verif=([A-Za-z0-9_-]+)$/.exec(location.hash);
+  if(!m){
+    card.innerHTML = '<div class="msg"><b>Halaman verifikasi tanda tangan.</b><br>Pindai QR pada dokumen untuk melihat tanda tangan manual dan status keabsahannya.</div>';
+    return;
+  }
+  try{
+    var b = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    while(b.length % 4) b += '=';
+    var bin = atob(b), bytes = new Uint8Array(bin.length);
+    for(var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var z = bytes.indexOf(0);
+    if(z < 0) throw new Error('format');
+    var meta = JSON.parse(new TextDecoder().decode(bytes.subarray(0, z)));
+    var w = meta[0], h = meta[1];
+    if(!(w > 0 && h > 0 && w * h <= 200000)) throw new Error('ukuran');
+
+    var cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    var cx = cv.getContext('2d');
+    var img = cx.createImageData(w, h);
+    var pos = z + 1, idx = 0, cur = 0, total = w * h;
+    while(pos < bytes.length && idx < total){
+      var r = 0, sh = 0, bb;
+      do{ bb = bytes[pos++]; r |= (bb & 127) << sh; sh += 7; }while((bb & 128) && pos < bytes.length);
+      if(cur){
+        for(var k = idx; k < idx + r && k < total; k++){ var p = k * 4; img.data[p] = 15; img.data[p+1] = 27; img.data[p+2] = 77; img.data[p+3] = 255; }
+      }
+      idx += r; cur ^= 1;
+    }
+    cx.putImageData(img, 0, 0);
+    var big = document.createElement('canvas');
+    big.width = w * 4; big.height = h * 4;
+    var bx = big.getContext('2d');
+    bx.imageSmoothingEnabled = true; bx.imageSmoothingQuality = 'high';
+    bx.drawImage(cv, 0, 0, big.width, big.height);
+
+    var name = meta[2] || '', role = meta[3] || '', nip = meta[4] || '', org = meta[5] || '', ymd = meta[6] || '', vid = meta[7] || '', stmt = meta[8] || '';
+    var tgl = '';
+    if(/^\d{8}$/.test(ymd)){
+      tgl = new Date(+ymd.slice(0,4), +ymd.slice(4,6) - 1, +ymd.slice(6,8)).toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
+    }
+    card.innerHTML =
+      '<div class="ok"><div class="ic">&#10004;</div><div class="tt">TANDA TANGAN RESMI</div></div>' +
+      '<div class="sec"><div class="lbl">Tanda tangan manual penandatangan</div><div class="sig" id="sigBox"></div></div>' +
+      '<div class="rows">' + row('Nama', name) + row('Jabatan', role) + row('NIP', nip) + row('Instansi', org) + row('Tanggal', tgl) + row('No. verifikasi', vid) + '</div>' +
+      '<div class="note">' + esc(stmt || 'Tanda tangan di atas adalah tanda tangan asli dan resmi dari penandatangan tersebut.') +
+      '<div class="s">Cocokkan tanda tangan ini dengan tanda tangan pada dokumen yang Anda pegang.</div></div>';
+    document.getElementById('sigBox').appendChild(big);
+    document.title = 'Verifikasi TTD — ' + name;
+  }catch(e){
+    card.innerHTML = '<div class="bad"><div class="ic">&#9888;</div><div class="tt">Data verifikasi tidak valid</div></div>' +
+      '<div class="msg">QR ini rusak atau terpotong. Jangan percaya tanda tangan ini sebelum dikonfirmasi langsung ke penandatangan.</div>';
+  }
+})();
+</script>
+</body>
+</html>
